@@ -1,9 +1,7 @@
 import uuid
 from django.db import models
 from django.utils import timezone
-from django.db.models import Q, F, Func
-from django.db.models.functions import Coalesce
-
+from django.db.models import Q, Func
 from django.contrib.postgres.fields import DateTimeRangeField
 from django.contrib.postgres.fields import RangeBoundary
 from django.contrib.postgres.constraints import ExclusionConstraint

@@ -3,7 +3,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils.dateparse import parse_date
 from django.db.models import Q
-
+from django.utils.timezone import make_aware
+from django.utils.dateparse import parse_datetime
+import datetime
 from .models import Entity, EntityDetail, AuditLog
 from .serializers import EntitySerializer
 from .services import scd2_upsert_entity, scd2_upsert_detail
@@ -79,11 +81,17 @@ class EntityHistoryView(APIView):
 class EntityAsOfView(APIView):
     def get(self, request):
         as_of_str = request.query_params.get('as_of')
-        as_of = parse_date(as_of_str)
-        if not as_of:
+        if not as_of_str:
             return Response({'error': 'as_of parameter required'}, status=400)
 
-        qs = Entity.objects.filter(valid_fromlte=as_of).filter(Q(valid_toisnull=True) | Q(valid_to__gte=as_of))
+        as_of = parse_datetime(as_of_str)
+        if as_of is None:
+            as_of_date = parse_date(as_of_str)
+            if not as_of_date:
+                return Response({'error': 'Invalid date format'}, status=400)
+            as_of = make_aware(datetime.datetime.combine(as_of_date, datetime.time.max))
+
+        qs = Entity.objects.filter(valid_from__lte=as_of).filter(Q(valid_to__isnull=True) | Q(valid_to__gte=as_of))
         return Response(EntitySerializer(qs, many=True).data)
 
 
@@ -93,7 +101,9 @@ class DiffView(APIView):
         to_date = parse_date(request.query_params.get('to'))
         if not from_date or not to_date:
             return Response({'error': 'from and to parameters required'}, status=400)
-        logs = AuditLog.objects.filter(timestampgte=from_date, timestamplte=to_date)
+        logs = AuditLog.objects.filter(timestamp__gte=make_aware(datetime.datetime.combine(from_date, datetime.time.min)),
+                                       timestamp__lte=make_aware(datetime.datetime.combine(to_date, datetime.time.max)),
+                                       )
         result = []
         for log in logs:
             result.append({

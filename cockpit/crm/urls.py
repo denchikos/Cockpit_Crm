@@ -8,3 +8,4 @@ urlpatterns = [
     path('entities-asof', EntityAsOfView.as_view(), name='entity-asof'),
     path('diff', DiffView.as_view(), name='entity-diff'),
 ]
+
