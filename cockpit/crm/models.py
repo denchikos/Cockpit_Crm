@@ -6,6 +6,7 @@ from django.contrib.postgres.fields import DateTimeRangeField
 from django.contrib.postgres.fields import RangeBoundary
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import RangeOperators
+from django.contrib.postgres.indexes import GinIndex
 
 
 class TsTzRange(Func):
@@ -20,7 +21,7 @@ class EntityType(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def str(self):
+    def __str__(self):
         return self.code
 
 
@@ -37,6 +38,7 @@ class Entity(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['entity_uid']),
+            GinIndex(fields=['display_name'], name='entity_display_name_gin', opclasses=['gin_trgm_ops']),
         ]
         constraints = [
             models.UniqueConstraint(fields=['entity_uid'], condition=Q(is_current=True), name='unique_current_entity'),
@@ -77,7 +79,7 @@ class EntityDetail(models.Model):
             ),
         ]
 
-    def str(self):
+    def __str__(self):
         return f"{self.entity_uid} {self.detail_code} -> {self.value}"
 
 

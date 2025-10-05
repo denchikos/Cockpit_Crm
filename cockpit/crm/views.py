@@ -1,9 +1,11 @@
-from rest_framework import generics, status
+import uuid
+from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.decorators import action
 from django.utils.dateparse import parse_date
 from django.db.models import Q
-from django.utils.timezone import make_aware
+from django.utils.timezone import make_aware, is_naive, get_current_timezone
 from django.utils.dateparse import parse_datetime
 import datetime
 from .models import Entity, EntityDetail, AuditLog
@@ -32,7 +34,7 @@ class EntityListCreateView(generics.ListCreateAPIView):
 
     def create(self, request, *args, **kwargs):
         data = request.data
-        entity_uid = data.get('entity_uid')
+        entity_uid = data.get('entity_uid') or str(uuid.uuid4())
         entity_type = data.get('entity_type')
         display_name = data.get('display_name')
         details = data.get('details', [])
@@ -47,7 +49,7 @@ class EntityListCreateView(generics.ListCreateAPIView):
 
 
 class EntityRetrieveUpdateView(APIView):
-    def get(self, entity_uid):
+    def get(self, request, entity_uid):
         entity = Entity.objects.filter(entity_uid=entity_uid, is_current=True).first()
         if not entity:
             return Response({'detail': 'Not found'}, status=404)
@@ -91,6 +93,9 @@ class EntityAsOfView(APIView):
                 return Response({'error': 'Invalid date format'}, status=400)
             as_of = make_aware(datetime.datetime.combine(as_of_date, datetime.time.max))
 
+        if is_naive(as_of):
+            as_of = make_aware(as_of, timezone=get_current_timezone())
+
         qs = Entity.objects.filter(valid_from__lte=as_of).filter(Q(valid_to__isnull=True) | Q(valid_to__gte=as_of))
         return Response(EntitySerializer(qs, many=True).data)
 
@@ -115,3 +120,16 @@ class DiffView(APIView):
                 'timestamp': log.timestamp,
             })
         return Response(result)
+
+
+class EntityViewSet(viewsets.ModelViewSet):
+    queryset = Entity.objects.filter(is_current=True)
+    serializer_class = EntitySerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        q = self.request.query_params.get('q')
+
+        if q:
+            qs = qs.filter(display_name__icontains=q)
+        return qs
